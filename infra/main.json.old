@@ -107,6 +107,14 @@
       "type": "string",
       "defaultValue": "S0"
     },
+    "searchServiceIndexName": {
+      "type": "string",
+      "defaultValue": "azure-chat"
+    },
+    "searchServiceSkuName": {
+      "type": "string",
+      "defaultValue": "standard"
+    },
     "storageServiceSku": {
       "type": "object",
       "defaultValue": {
@@ -204,6 +212,12 @@
           "formRecognizerSkuName": {
             "value": "[parameters('formRecognizerSkuName')]"
           },
+          "searchServiceIndexName": {
+            "value": "[parameters('searchServiceIndexName')]"
+          },
+          "searchServiceSkuName": {
+            "value": "[parameters('searchServiceSkuName')]"
+          },
           "storageServiceSku": {
             "value": "[parameters('storageServiceSku')]"
           },
@@ -285,6 +299,14 @@
               "type": "string",
               "defaultValue": "S0"
             },
+            "searchServiceSkuName": {
+              "type": "string",
+              "defaultValue": "standard"
+            },
+            "searchServiceIndexName": {
+              "type": "string",
+              "defaultValue": "azure-chat"
+            },
             "storageServiceSku": {
               "type": "object"
             },
@@ -310,6 +332,7 @@
             "form_recognizer_name": "[toLower(format('{0}-form-{1}', parameters('name'), parameters('resourceToken')))]",
             "speech_service_name": "[toLower(format('{0}-speech-{1}', parameters('name'), parameters('resourceToken')))]",
             "cosmos_name": "[toLower(format('{0}-cosmos-{1}', parameters('name'), parameters('resourceToken')))]",
+            "search_name": "[toLower(format('{0}search{1}', parameters('name'), parameters('resourceToken')))]",
             "webapp_name": "[toLower(format('{0}-webapp-{1}', parameters('name'), parameters('resourceToken')))]",
             "appservice_name": "[toLower(format('{0}-app-{1}', parameters('name'), parameters('resourceToken')))]",
             "storage_prefix": "[take(parameters('name'), 8)]",
@@ -456,6 +479,19 @@
             {
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2021-06-01-preview",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'AZURE-SEARCH-API-KEY')]",
+              "properties": {
+                "contentType": "text/plain",
+                "value": "[listAdminKeys(resourceId('Microsoft.Search/searchServices', variables('search_name')), '2022-09-01').secondaryKey]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+                "[resourceId('Microsoft.Search/searchServices', variables('search_name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2021-06-01-preview",
               "name": "[format('{0}/{1}', variables('keyVaultName'), 'AZURE-STORAGE-ACCOUNT-KEY')]",
               "properties": {
                 "contentType": "text/plain",
@@ -513,8 +549,10 @@
                 "reserved": true
               },
               "sku": {
-                "name": "F0",
-                "tier": "Free",
+                "name": "P0v3",
+                "tier": "Premium0V3",
+                "size": "P0v3",
+                "family": "Pv3",
                 "capacity": 1
               },
               "kind": "linux"
@@ -596,6 +634,18 @@
                       "value": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', variables('keyVaultName'), 'AZURE-COSMOSDB-KEY')]"
                     },
                     {
+                      "name": "AZURE_SEARCH_API_KEY",
+                      "value": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', variables('keyVaultName'), 'AZURE-SEARCH-API-KEY')]"
+                    },
+                    {
+                      "name": "AZURE_SEARCH_NAME",
+                      "value": "[variables('search_name')]"
+                    },
+                    {
+                      "name": "AZURE_SEARCH_INDEX_NAME",
+                      "value": "[parameters('searchServiceIndexName')]"
+                    },
+                    {
                       "name": "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT",
                       "value": "[format('https://{0}.cognitiveservices.azure.com/', variables('form_recognizer_name'))]"
                     },
@@ -631,6 +681,7 @@
                 "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-DOCUMENT-INTELLIGENCE-KEY')]",
                 "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-OPENAI-API-KEY')]",
                 "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-OPENAI-DALLE-API-KEY')]",
+                "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-SEARCH-API-KEY')]",
                 "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-SPEECH-KEY')]",
                 "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AZURE-STORAGE-ACCOUNT-KEY')]",
                 "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmos_name'))]",
@@ -708,14 +759,8 @@
                 "locations": [
                   {
                     "locationName": "[parameters('location')]",
-                    "failoverPriority": 0,
-					"isZoneRedundant": false,
+                    "failoverPriority": 0
                   }
-                ],
-				"capabilities": [
-                    {
-                        "name": "EnableServerless"
-                    }
                 ],
                 "disableKeyBasedMetadataWriteAccess": true
               }
@@ -784,6 +829,21 @@
               },
               "sku": {
                 "name": "[parameters('formRecognizerSkuName')]"
+              }
+            },
+            {
+              "type": "Microsoft.Search/searchServices",
+              "apiVersion": "2022-09-01",
+              "name": "[variables('search_name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "partitionCount": 1,
+                "publicNetworkAccess": "enabled",
+                "replicaCount": 1
+              },
+              "sku": {
+                "name": "[parameters('searchServiceSkuName')]"
               }
             },
             {
